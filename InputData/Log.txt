@@ -1,4 +1,6 @@
-Radiance data 3DIMG_L2B_CMK june18 2022- june19 2024
+Radiance data 3DIMG_L2B_CMK june18 2022- june19 2024 pan-India data, have to filter it to decided corrdinates
+
+FOLLOWING TWO DATASETS WERE NOT UPLOADED OR USED
 Cloud data for filtering pixels from radiance data/ radiance data 3DIMG_L1C_SGP june18 2022- june19 2024
 aerosol optical thickness 3DIMG_L2G_AOD june18 2022- june19 2024
 
