@@ -1,0 +1,7 @@
+Radiance data 3DIMG_L2B_CMK june18 2022- june19 2024
+Cloud data for filtering pixels from radiance data/ radiance data 3DIMG_L1C_SGP june18 2022- june19 2024
+aerosol optical thickness 3DIMG_L2G_AOD june18 2022- june19 2024
+
+M2T1NXASM (recommended dataset for boundary layer depth from merra2 but I couldn't find it)
+
+From ERA5 took boundary layer depth data for the entire year of 2023 in the coordinates north34, west73.5, south27, east81.5 (comprises Uttarakhand, himachal Pradesh, Haryana, Punjab with a small buffer)
