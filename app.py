@@ -8,7 +8,7 @@ st.set_page_config(page_title="Delhi Air Quality Grid", layout="wide")
 st.title("Delhi Air Quality Grid: PM₂.₅ and PM₁₀ Heatmap")
 
 # Load data
-df = pd.read_csv("delhi_air_quality_grid.csv")
+df = pd.read_csv("testing.csv")
 df['time'] = pd.to_datetime(df['time'])
 
 # Sidebar controls
