@@ -1,60 +1,47 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import pydeck as pdk
+import plotly.express as px
 from datetime import datetime
 
-# Set up the app
+# App config
 st.set_page_config(page_title="Air Quality Map", layout="wide")
-st.title("Delhi Air Quality Grid: PM₂.₅ and PM₁₀ Interactive Map")
+st.title("Air Quality Map: PM₂.₅ and PM₁₀ Heatmap")
 
-# Upload or load CSV data
+# Load data
 df = pd.read_csv("testing.csv")
 df['time'] = pd.to_datetime(df['time'])
 
 # Sidebar controls
 st.sidebar.header("Filters")
 selected_date = st.sidebar.date_input("Select Date", value=pd.to_datetime("2025-07-23"))
-selected_hour = st.sidebar.slider("Select Hour", min_value=0, max_value=23, value=5)
+selected_hour = st.sidebar.slider("Select Hour", min_value=0, max_value=23, value=12)
 metric = st.sidebar.radio("Pollutant", ["pm25", "pm10"])
 
-# Filter the data by date and selected hour
+# Filter data
 filtered_df = df[(df['time'].dt.date == selected_date) &
                  (df['time'].dt.hour == selected_hour)]
 
 if filtered_df.empty:
-    st.warning("No data available for the selected date and time.")
+    st.warning("No data available for the selected date and hour.")
 else:
-    # Drop NaNs for cleaner display
-    filtered_df = filtered_df.dropna(subset=[metric])
-
-    # Create PyDeck layer for scatterplot
-    layer = pdk.Layer(
-        "HeatmapLayer",
-        data=filtered_df,
-        get_position='[longitude, latitude]',
-        get_weight=metric,
-        radiusPixels=40,
-        aggregation='MEAN'
+    fig = px.density_heatmap(
+        filtered_df,
+        x="longitude",
+        y="latitude",
+        z=metric,
+        color_continuous_scale="inferno",
+        histfunc="avg",
+        nbinsx=20,
+        nbinsy=20,
+        labels={metric: f"{metric.upper()} (μg/m³)"},
+        hover_data={metric: True, "longitude": True, "latitude": True}
     )
 
-    tooltip = {
-        "html": f"<b>PM Concentration:</b> {{{metric}}} μg/m³",
-        "style": {
-            "backgroundColor": "steelblue",
-            "color": "white"
-        }
-    }
+    fig.update_layout(
+        title=f"Heatmap of {metric.upper()} on {selected_date} at {selected_hour}:00",
+        xaxis_title="Longitude",
+        yaxis_title="Latitude",
+        height=700
+    )
 
-    # Display PyDeck map
-    st.pydeck_chart(pdk.Deck(
-        map_style='mapbox://styles/mapbox/dark-v10',
-        initial_view_state=pdk.ViewState(
-            latitude=filtered_df['latitude'].mean(),
-            longitude=filtered_df['longitude'].mean(),
-            zoom=10,
-            pitch=40,
-        ),
-        layers=[layer],
-        tooltip=tooltip
-    ))
+    st.plotly_chart(fig, use_container_width=True)
