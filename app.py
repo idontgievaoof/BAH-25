@@ -1,72 +1,65 @@
 import streamlit as st
 import pandas as pd
-import pydeck as pdk
-from datetime import time
+import plotly.graph_objects as go
+from datetime import datetime, date
 
-# Load the data
-df = pd.read_csv("testing.csv", parse_dates=["time"])
+# Load the data (make sure to keep this CSV in the same directory)
+df = pd.read_csv("delhi_air_quality_grid.csv", parse_dates=['time'])
 
-# Sidebar elements
-st.sidebar.title("Air Quality Map Controls")
+# App layout
+st.set_page_config(page_title="Air Quality Grid Viewer", layout="wide")
+st.title("Delhi NCR Air Quality Grid (Midnight - 6 AM)")
+st.markdown("""
+This map displays interpolated PM₂.₅ and PM₁₀ levels over the Delhi NCR region.
+Select a date, PM type, and hour to view pollution concentrations.
+""")
 
-# Select Date (we only have one in this dataset)
-unique_dates = df['time'].dt.date.unique()
-selected_date = st.sidebar.date_input("Select date", value=unique_dates[0])
+# Sidebar controls with light theme look
+with st.sidebar:
+    st.header("Controls")
+    selected_date = st.date_input("Select Date", value=date.today())
+    pm_type = st.selectbox("Select PM Type", ["pm25", "pm10"])
+    hour = st.slider("Hour of Day (0 to 6 only)", 0, 6, 3)
 
-# Select PM type
-pm_type = st.sidebar.selectbox("Select PM value", ["pm25", "pm10"])
+# Filter based on date and hour
+df_today = df[df['time'].dt.date == selected_date]
 
-# Select time with slider
-selected_hour = st.sidebar.slider("Select time of selected day", 0, 5, 0)
+df_filtered = df_today[df_today['time'].dt.hour == hour]
 
-# Filter data
-filtered_df = df[
-    (df['time'].dt.date == selected_date) &
-    (df['time'].dt.hour == selected_hour)
-]
+if df_filtered.empty:
+    st.warning("No data available for the selected date and time.")
+else:
+    # Setup color range
+    color_range = {
+        "pm25": [0, 250],
+        "pm10": [0, 300]
+    }
 
-# Page layout
-st.title("Air Quality Map")
+    fig = go.Figure(go.Densitymapbox(
+        lat=df_filtered['latitude'],
+        lon=df_filtered['longitude'],
+        z=df_filtered[pm_type],
+        radius=30,
+        colorscale="YlOrRd",
+        zmin=color_range[pm_type][0],
+        zmax=color_range[pm_type][1],
+        hovertemplate=
+            "Latitude: %{lat}<br>" +
+            "Longitude: %{lon}<br>" +
+            f"{pm_type.upper()} = %{{z}} µg/m³"
+    ))
 
-# Search bar
-search_location = st.text_input("Search", "")
+    fig.update_layout(
+        mapbox_style="carto-positron",
+        mapbox=dict(
+            center=dict(lat=28.6, lon=77.2),
+            zoom=9,
+            pitch=0,
+            bearing=0
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=650,
+        coloraxis_showscale=True
+    )
 
-# Show predicted interactive map
-st.write(f"### PM Concentration at {selected_hour:02d}:00 hrs on {selected_date}")
-
-# Color scale range
-min_val = filtered_df[pm_type].min()
-max_val = filtered_df[pm_type].max()
-
-# Define layer for pydeck map
-layer = pdk.Layer(
-    "ScatterplotLayer",
-    data=filtered_df,
-    get_position='[longitude, latitude]',
-    get_radius=500,
-    get_fill_color=f'[255 * ({pm_type} - {min_val}) / ({max_val - min_val + 1e-6}), 100, 150]',
-    pickable=True
-)
-
-# Define tooltip
-tooltip = {
-    "html": f"<b>{pm_type.upper()}</b>: {{{pm_type}}} μg/m³",
-    "style": {"color": "white"}
-}
-
-# Render pydeck map
-st.pydeck_chart(pdk.Deck(
-    map_style='mapbox://styles/mapbox/light-v9',
-    initial_view_state=pdk.ViewState(
-        latitude=28.6,
-        longitude=77.2,
-        zoom=9,
-        pitch=40
-    ),
-    layers=[layer],
-    tooltip=tooltip
-))
-
-# Show data table
-with st.expander("Show data table"):
-    st.dataframe(filtered_df.reset_index(drop=True))
+    st.plotly_chart(fig, use_container_width=True)
