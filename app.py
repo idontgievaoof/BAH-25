@@ -1,47 +1,47 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
+
+# App config
+st.set_page_config(page_title="Delhi Air Quality Grid", layout="wide")
+st.title("Delhi Air Quality Grid: PM₂.₅ and PM₁₀ Heatmap")
 
 # Load data
-@st.cache_data
-def load_data():
-    df = pd.read_csv("testing.csv")  # Replace with your CSV file path
-    return df
+df = pd.read_csv("delhi_air_quality_grid.csv")
+df['time'] = pd.to_datetime(df['time'])
 
-df = load_data()
+# Sidebar controls
+st.sidebar.header("Filters")
+selected_date = st.sidebar.date_input("Select Date", value=pd.to_datetime("2025-07-23"))
+selected_hour = st.sidebar.slider("Select Hour", min_value=0, max_value=23, value=12)
+metric = st.sidebar.radio("Pollutant", ["pm25", "pm10"])
 
-# Sidebar: Select timestamp
-available_times = df['time'].unique()
-selected_time = st.sidebar.selectbox("Select Time", available_times)
+# Filter data
+filtered_df = df[(df['time'].dt.date == selected_date) &
+                 (df['time'].dt.hour == selected_hour)]
 
-# Filter for selected time
-filtered = df[df['time'] == selected_time]
+if filtered_df.empty:
+    st.warning("No data available for the selected date and hour.")
+else:
+    fig = px.density_heatmap(
+        filtered_df,
+        x="longitude",
+        y="latitude",
+        z=metric,
+        color_continuous_scale="inferno",
+        histfunc="avg",
+        nbinsx=20,
+        nbinsy=20,
+        labels={metric: f"{metric.upper()} (μg/m³)"},
+        hover_data={metric: True, "longitude": True, "latitude": True}
+    )
 
-# Pivot for heatmap
-heatmap_data = filtered.pivot(index='y', columns='x', values='pm_concentration')
-heatmap_data = heatmap_data.sort_index(ascending=False)  # Y-axis inversion
+    fig.update_layout(
+        title=f"Heatmap of {metric.upper()} on {selected_date} at {selected_hour}:00",
+        xaxis_title="Longitude",
+        yaxis_title="Latitude",
+        height=700
+    )
 
-# Plot heatmap
-fig = px.imshow(
-    heatmap_data,
-    labels=dict(color="PM Concentration"),
-    x=heatmap_data.columns,
-    y=heatmap_data.index,
-    color_continuous_scale='YlOrRd',
-    origin='upper',
-    aspect='auto'
-)
-
-# Smaller squares via layout tuning
-fig.update_traces(hovertemplate='x: %{x}<br>y: %{y}<br>PM: %{z:.2f}')
-fig.update_layout(
-    title=f"PM Concentration Heatmap at {selected_time}",
-    xaxis_title="X",
-    yaxis_title="Y",
-    width=700,
-    height=700
-)
-
-# Display
-st.title("📊 Heatmap Viewer")
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
