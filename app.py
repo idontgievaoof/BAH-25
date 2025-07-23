@@ -1,65 +1,43 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime, date
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
 
-# Load the data (make sure to keep this CSV in the same directory)
-df = pd.read_csv("delhi_air_quality_grid.csv", parse_dates=['time'])
+# Set up the app
+st.set_page_config(page_title="Delhi Air Quality Grid", layout="wide")
+st.title("Delhi Air Quality Grid: PM₂.₅ and PM₁₀ Heatmaps")
 
-# App layout
-st.set_page_config(page_title="Air Quality Grid Viewer", layout="wide")
-st.title("Delhi NCR Air Quality Grid (Midnight - 6 AM)")
-st.markdown("""
-This map displays interpolated PM₂.₅ and PM₁₀ levels over the Delhi NCR region.
-Select a date, PM type, and hour to view pollution concentrations.
-""")
+# Upload or load CSV data
+df = pd.read_csv("delhi_air_quality_grid.csv")
+df['time'] = pd.to_datetime(df['time'])
 
-# Sidebar controls with light theme look
-with st.sidebar:
-    st.header("Controls")
-    selected_date = st.date_input("Select Date", value=date.today())
-    pm_type = st.selectbox("Select PM Type", ["pm25", "pm10"])
-    hour = st.slider("Hour of Day (0 to 6 only)", 0, 6, 3)
+# Sidebar controls
+st.sidebar.header("Filters")
+selected_date = st.sidebar.date_input("Select Date", value=pd.to_datetime("2025-07-23"))
+hour_range = st.sidebar.slider("Hour Range", min_value=0, max_value=23, value=(0, 6))
+metric = st.sidebar.radio("Pollutant", ["pm25", "pm10"])
 
-# Filter based on date and hour
-df_today = df[df['time'].dt.date == selected_date]
+# Filter the data by date and hour
+filtered_df = df[(df['time'].dt.date == selected_date) &
+                 (df['time'].dt.hour >= hour_range[0]) &
+                 (df['time'].dt.hour <= hour_range[1])]
 
-df_filtered = df_today[df_today['time'].dt.hour == hour]
-
-if df_filtered.empty:
-    st.warning("No data available for the selected date and time.")
+if filtered_df.empty:
+    st.warning("No data available for the selected date and time range.")
 else:
-    # Setup color range
-    color_range = {
-        "pm25": [0, 250],
-        "pm10": [0, 300]
-    }
+    # Pivot the table to create a grid
+    pivot = filtered_df.pivot_table(
+        index='latitude', columns='longitude', values=metric, aggfunc='mean')
 
-    fig = go.Figure(go.Densitymapbox(
-        lat=df_filtered['latitude'],
-        lon=df_filtered['longitude'],
-        z=df_filtered[pm_type],
-        radius=30,
-        colorscale="YlOrRd",
-        zmin=color_range[pm_type][0],
-        zmax=color_range[pm_type][1],
-        hovertemplate=
-            "Latitude: %{lat}<br>" +
-            "Longitude: %{lon}<br>" +
-            f"{pm_type.upper()} = %{{z}} µg/m³"
-    ))
+    # Sort for consistent heatmap orientation
+    pivot = pivot.sort_index(ascending=False)
 
-    fig.update_layout(
-        mapbox_style="carto-positron",
-        mapbox=dict(
-            center=dict(lat=28.6, lon=77.2),
-            zoom=9,
-            pitch=0,
-            bearing=0
-        ),
-        margin=dict(l=0, r=0, t=0, b=0),
-        height=650,
-        coloraxis_showscale=True
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+    # Plot heatmap
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(pivot, ax=ax, cmap="inferno", cbar_kws={'label': f'{metric.upper()} concentration (μg/m³)'})
+    ax.set_title(f"Heatmap of {metric.upper()} on {selected_date} ({hour_range[0]}:00 - {hour_range[1]}:00)")
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    st.pyplot(fig)
