@@ -1,115 +1,72 @@
-
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
-import datetime
+from datetime import time
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="Air Quality Monitoring Dashboard",
-    page_icon="💨",
-    layout="wide",
-)
+# Load the data
+df = pd.read_excel("delhi_air_quality_grid.xlsx")
 
+# Sidebar elements
+st.sidebar.title("Air Quality Map Controls")
 
-# --- Data Loading ---
-# This function loads the data. Caching it makes the app run faster.
-@st.cache_data
-def load_data():
-    # !!! IMPORTANT !!!
-    # Replace 'your_final_processed_data.csv' with the actual filename of your dataset.
-    # Make sure your CSV has columns named 'latitude', 'longitude', 'time', 'pm25', and 'pm10'.
-    # The 'time' column should be a datetime object.
-    try:
-        df = pd.read_csv('testing.csv')
-        df['time'] = pd.to_datetime(df['time'])
-        return df
-    except FileNotFoundError:
-        # Create a sample DataFrame if the file isn't found, so the app doesn't crash.
-        st.error("Data file not found. Displaying sample data.")
-        sample_data = {
-            'time': pd.to_datetime(['2023-01-15T10:00:00', '2023-01-15T11:00:00']),
-            'latitude': [30.73, 30.74],
-            'longitude': [76.77, 76.78],
-            'pm25': [85.5, 92.1],
-            'pm10': [150.2, 165.7]
-        }
-        return pd.DataFrame(sample_data)
+# Select Date (we only have one in this dataset)
+unique_dates = df['time'].dt.date.unique()
+selected_date = st.sidebar.date_input("Select date", value=unique_dates[0])
 
-df = load_data()
+# Select PM type
+pm_type = st.sidebar.selectbox("Select PM value", ["pm25", "pm10"])
 
+# Select time with slider
+selected_hour = st.sidebar.slider("Select time of selected day", 0, 5, 0)
 
-# --- Sidebar for Controls ---
-st.sidebar.header("Controls")
+# Filter data
+filtered_df = df[
+    (df['time'].dt.date == selected_date) &
+    (df['time'].dt.hour == selected_hour)
+]
 
-# Date selector
-selected_date = st.sidebar.date_input(
-    "Select date",
-    datetime.date(2023, 1, 15), # Default date
-    min_value=df['time'].min().date(),
-    max_value=df['time'].max().date()
-)
+# Page layout
+st.title("Air Quality Map")
 
-# PM value selector
-pm_type = st.sidebar.selectbox(
-    "Select PM value",
-    ('PM2.5', 'PM10')
-)
-# Map the selection to the column name in the DataFrame
-pm_column = 'pm25' if pm_type == 'PM2.5' else 'pm10'
+# Search bar
+search_location = st.text_input("Search", "")
 
-# Time slider
-selected_hour = st.sidebar.slider(
-    "Select time of selected day",
-    0, 23, 10  # Min, max, default value
-)
+# Show predicted interactive map
+st.write(f"### PM Concentration at {selected_hour:02d}:00 hrs on {selected_date}")
 
+# Color scale range
+min_val = filtered_df[pm_type].min()
+max_val = filtered_df[pm_type].max()
 
-# --- Filtering Data Based on Controls ---
-# Combine date and time to create a full datetime object for filtering
-filter_time = pd.to_datetime(f"{selected_date} {selected_hour:02d}:00:00")
-
-# Find the closest timestamp in the data
-filtered_df = df.iloc[(df['time'] - filter_time).abs().argsort()[:1]]
-
-
-# --- Main Panel ---
-st.header("Air Quality Map")
-
-# Define the PyDeck map layer
+# Define layer for pydeck map
 layer = pdk.Layer(
-    'ScatterplotLayer',
+    "ScatterplotLayer",
     data=filtered_df,
     get_position='[longitude, latitude]',
-    get_color=f'[255, 140, 0, 160]',  # Using a single color for now
-    get_radius=f'{pm_column} * 100', # Radius based on PM value
-    pickable=True,
-    auto_highlight=True
+    get_radius=500,
+    get_fill_color=f'[255 * ({pm_type} - {min_val}) / ({max_val - min_val + 1e-6}), 100, 150]',
+    pickable=True
 )
 
-# Define the tooltip that appears on hover
+# Define tooltip
 tooltip = {
-    "html": f"<b>PM Value:</b> {{{pm_column}}} µg/m³<br/><b>Time:</b> {{time}}",
-    "style": {
-        "backgroundColor": "steelblue",
-        "color": "white"
-    }
+    "html": f"<b>{pm_type.upper()}</b>: {{{pm_type}}} μg/m³",
+    "style": {"color": "white"}
 }
 
-# Define the initial view of the map
-view_state = pdk.ViewState(
-    latitude=30.7,
-    longitude=76.7,
-    zoom=8,
-    pitch=50
-)
-
-# Render the map
+# Render pydeck map
 st.pydeck_chart(pdk.Deck(
     map_style='mapbox://styles/mapbox/light-v9',
-    initial_view_state=view_state,
+    initial_view_state=pdk.ViewState(
+        latitude=28.6,
+        longitude=77.2,
+        zoom=9,
+        pitch=40
+    ),
     layers=[layer],
     tooltip=tooltip
 ))
 
-st.write(f"Displaying data for **{pm_type}** on **{selected_date.strftime('%Y-%m-%d')}** at approximately **{selected_hour:02d}:00**.")
+# Show data table
+with st.expander("Show data table"):
+    st.dataframe(filtered_df.reset_index(drop=True))
