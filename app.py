@@ -4,7 +4,7 @@ import pydeck as pdk
 from datetime import time
 
 # Load the data
-df = pd.read_excel("testing.xlsx")
+df = pd.read_csv("testing.csv", parse_dates=["time"])
 
 # Sidebar elements
 st.sidebar.title("Air Quality Map Controls")
